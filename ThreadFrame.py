@@ -54,7 +54,7 @@ class WorkRequest:
             self.requestID = id(self)
         else:
             try:
-                self.requestID = hash(RequestID)
+                self.requestID = hash(requestID)
             except TypeError:
                 raise TypeError('RequestID must be hashable')
         self.args = args or []
@@ -69,6 +69,7 @@ class ThreadPool:
         self._requestQueue = Queue.Queue(req_size)
         self._resultQueue = Queue.Queue(result_size)
         self.workers = []
+        self.dismissWorkers = []
         self.workRequest = {}
         self.createWorkers(num_threads, poll_timeout)
 
@@ -78,18 +79,18 @@ class ThreadPool:
 
     def dismissWorkers(self, number, do_join):
         dismiss_list = []
-        for i in range(min(number, self.worksize())):
+        for i in range(min(number, len(self.workers))):
             work = self.workers.pop()
             work.dismiss()
             dismiss_list.append(work)
         if do_join:
             for worker in dismiss_list:
-                work.join()
+                worker.join()
         else:
             self.dismissWorkers.extend(dismiss_list)
 
-    def joinAlldismissWorkers():
-        for worker in dismissWorkers:
+    def joinAlldismissWorkers(self):
+        for worker in self.dismissWorkers:
             worker.join()
         dismissWorkers = []
 

